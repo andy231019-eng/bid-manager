@@ -87,3 +87,17 @@ export async function PATCH(
     return NextResponse.json({ error: "Failed to update project" }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Tasks are deleted automatically via ON DELETE CASCADE defined in the schema
+    await prisma.project.delete({ where: { id: params.id } });
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Failed to delete project" }, { status: 500 });
+  }
+}

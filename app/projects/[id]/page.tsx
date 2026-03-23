@@ -48,7 +48,21 @@ export default function ProjectDetail({ params }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showEdit, setShowEdit] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const router = useRouter();
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/projects/${params.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      router.push("/");
+    } catch {
+      setDeleting(false);
+      setShowDelete(false);
+    }
+  }
 
   const fetchProject = useCallback(async () => {
     try {
@@ -193,6 +207,29 @@ export default function ProjectDetail({ params }: Props) {
               >
                 <PencilIcon />
                 編輯
+              </button>
+              <button
+                onClick={() => setShowDelete(true)}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-xs transition flex-shrink-0"
+                style={{
+                  color: "#d64040",
+                  border: "1px solid #d64040",
+                  background: "transparent",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#fdf0f0")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                title="刪除案件"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path
+                    d="M1.5 3h9M4.5 3V2a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1m1.5 0l-.5 7a.5.5 0 01-.5.5h-5a.5.5 0 01-.5-.5L3 3"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                刪除
               </button>
             </div>
           </div>
@@ -396,6 +433,64 @@ export default function ProjectDetail({ params }: Props) {
             setShowEdit(false);
           }}
         />
+      )}
+
+      {showDelete && project && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(26,25,22,0.45)" }}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden"
+            style={{ border: "1px solid #d8d5cc" }}
+          >
+            <div className="px-6 pt-6 pb-4">
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center mb-4"
+                style={{ background: "#fdf0f0" }}
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <path
+                    d="M9 6v4m0 3h.01M3 9a6 6 0 1012 0A6 6 0 003 9z"
+                    stroke="#d64040"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+              <h2
+                className="text-base font-bold mb-1"
+                style={{ color: "#1a1916", fontFamily: "var(--font-epilogue)" }}
+              >
+                確定要刪除此案件嗎？
+              </h2>
+              <p className="text-sm" style={{ color: "#6b6860" }}>
+                「{project.name}」及其所有任務將被永久刪除，此操作無法復原。
+              </p>
+            </div>
+            <div
+              className="px-6 py-4 flex justify-end gap-2"
+              style={{ borderTop: "1px solid #d8d5cc" }}
+            >
+              <button
+                onClick={() => setShowDelete(false)}
+                disabled={deleting}
+                className="px-4 py-2 text-sm rounded-lg transition hover:bg-[#f5f4f0]"
+                style={{ color: "#6b6860", border: "1px solid #d8d5cc" }}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-5 py-2 text-sm font-semibold rounded-lg transition hover:opacity-80 disabled:opacity-50"
+                style={{ background: "#d64040", color: "#fff" }}
+              >
+                {deleting ? "刪除中…" : "確認刪除"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
