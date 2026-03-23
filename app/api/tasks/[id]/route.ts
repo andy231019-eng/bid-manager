@@ -7,7 +7,7 @@ export async function PATCH(
 ) {
   try {
     const body = await req.json();
-    const { done, completedAt, note, offset, ownerUnit, requiredDocs } = body;
+    const { done, completedAt, note, offset, ownerUnit, requiredDocs, description } = body;
 
     const updateData: Record<string, unknown> = {};
 
@@ -17,6 +17,7 @@ export async function PATCH(
     if (typeof note !== "undefined") updateData.note = note;
     if (typeof ownerUnit !== "undefined") updateData.ownerUnit = ownerUnit;
     if (typeof requiredDocs !== "undefined") updateData.requiredDocs = requiredDocs;
+    if (typeof description !== "undefined") updateData.description = description;
 
     // When offset changes, recalculate due from the project's deadline
     if (typeof offset !== "undefined") {

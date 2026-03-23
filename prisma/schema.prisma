@@ -28,6 +28,7 @@ model Task {
   done        Boolean   @default(false)
   completedAt DateTime?
   note        String    @default("")
+  description String    @default("")
   ownerUnit   String?
   requiredDocs String?
   createdAt   DateTime  @default(now())

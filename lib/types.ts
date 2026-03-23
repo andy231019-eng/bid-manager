@@ -9,6 +9,7 @@ export type Task = {
   done: boolean;
   completedAt: string | null;
   note: string;
+  description: string;
   ownerUnit: string | null;
   requiredDocs: string | null;
   uploadedFiles?: string[];

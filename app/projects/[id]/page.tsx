@@ -59,7 +59,6 @@ export default function ProjectDetail({ params }: Props) {
   const [roles, setRoles] = useState<string[]>(DEFAULT_ROLES);
   const [taskFiles, setTaskFiles] = useState<Record<string, string[]>>({});
   const [uploadingForTask, setUploadingForTask] = useState<string | null>(null);
-  const [doneError, setDoneError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -107,16 +106,6 @@ export default function ProjectDetail({ params }: Props) {
 
   async function toggleDone(task: Task) {
     const newDone = !task.done;
-    if (newDone) {
-      const hasFiles = (taskFiles[task.id] ?? []).length > 0;
-      const hasDocs = !!(task.requiredDocs?.trim());
-      if (!hasFiles && !hasDocs) {
-        setDoneError(task.id);
-        setTimeout(() => setDoneError(null), 3000);
-        return;
-      }
-    }
-    setDoneError(null);
     const newCompletedAt = newDone ? nowTaiwan() : null;
 
     setProject((prev) =>
@@ -134,22 +123,6 @@ export default function ProjectDetail({ params }: Props) {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ done: newDone, completedAt: newCompletedAt }),
-    });
-  }
-
-  function handleNoteChange(taskId: string, value: string) {
-    setProject((prev) =>
-      prev
-        ? { ...prev, tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, note: value } : t)) }
-        : prev
-    );
-  }
-
-  function handleNoteBlur(task: Task) {
-    fetch(`/api/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note: task.note }),
     });
   }
 
@@ -228,15 +201,53 @@ export default function ProjectDetail({ params }: Props) {
     });
   }
 
+  async function applyAutoComplete(task: Task, desc: string, files: string[]) {
+    const shouldBeDone = desc.trim().length > 0 || files.length > 0;
+    if (shouldBeDone === task.done) return;
+    const newCompletedAt = shouldBeDone ? nowTaiwan() : null;
+    setProject((prev) =>
+      prev
+        ? { ...prev, tasks: prev.tasks.map((t) => t.id === task.id ? { ...t, done: shouldBeDone, completedAt: newCompletedAt } : t) }
+        : prev
+    );
+    await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done: shouldBeDone, completedAt: newCompletedAt }),
+    });
+  }
+
+  function handleDescChange(taskId: string, value: string) {
+    setProject((prev) =>
+      prev ? { ...prev, tasks: prev.tasks.map((t) => t.id === taskId ? { ...t, description: value } : t) } : prev
+    );
+  }
+
+  function handleDescBlur(task: Task) {
+    fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: task.description }),
+    });
+    applyAutoComplete(task, task.description, taskFiles[task.id] ?? []);
+  }
+
+  function handleRemoveFile(task: Task, idx: number) {
+    const newFiles = (taskFiles[task.id] ?? []).filter((_, i) => i !== idx);
+    setTaskFiles((prev) => ({ ...prev, [task.id]: newFiles }));
+    applyAutoComplete(task, task.description, newFiles);
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!uploadingForTask) return;
+    if (!uploadingForTask || !project) return;
+    const taskId = uploadingForTask;
     const names = Array.from(e.target.files ?? []).map((f) => f.name);
-    setTaskFiles((prev) => ({
-      ...prev,
-      [uploadingForTask]: [...(prev[uploadingForTask] ?? []), ...names],
-    }));
+    const newFiles = [...(taskFiles[taskId] ?? []), ...names];
+    setTaskFiles((prev) => ({ ...prev, [taskId]: newFiles }));
     e.target.value = "";
     setUploadingForTask(null);
+    const task = project.tasks.find((t) => t.id === taskId);
+    if (task) applyAutoComplete(task, task.description, newFiles);
   }
 
   if (loading) {
@@ -427,7 +438,7 @@ export default function ProjectDetail({ params }: Props) {
                   <table className="w-full text-sm">
                     <thead>
                       <tr style={{ borderBottom: "1px solid #f0ede8", background: "#faf9f7" }}>
-                        {["完成", "流程", "負責人", "應收文件/資訊", "距截標日", "截止日", "完成時間", "備註"].map((h) => (
+                        {["完成", "流程", "負責人", "應收文件/資訊", "距截標日", "截止日", "完成時間"].map((h) => (
                           <th
                             key={h}
                             className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider"
@@ -454,23 +465,13 @@ export default function ProjectDetail({ params }: Props) {
                           >
                             {/* Checkbox */}
                             <td className="px-4 py-3.5 w-10">
-                              <div className="relative">
-                                <input
-                                  type="checkbox"
-                                  checked={task.done}
-                                  onChange={() => toggleDone(task)}
-                                  className="w-4 h-4 cursor-pointer rounded accent-black"
-                                  style={{ accentColor: "#1a1916" }}
-                                />
-                                {doneError === task.id && (
-                                  <div
-                                    className="absolute left-6 top-0 z-20 text-xs whitespace-nowrap px-2 py-1 rounded shadow-md"
-                                    style={{ background: "#fff", border: "1px solid #d8d5cc", color: "#d64040" }}
-                                  >
-                                    請先填寫應收文件或上傳檔案
-                                  </div>
-                                )}
-                              </div>
+                              <input
+                                type="checkbox"
+                                checked={task.done}
+                                onChange={() => toggleDone(task)}
+                                className="w-4 h-4 cursor-pointer rounded accent-black"
+                                style={{ accentColor: "#1a1916" }}
+                              />
                             </td>
 
                             {/* 流程 name */}
@@ -542,55 +543,62 @@ export default function ProjectDetail({ params }: Props) {
                               )}
                             </td>
 
-                            {/* Required docs */}
-                            <td className="px-4 py-3.5 min-w-[180px]">
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-1.5">
-                                  <input
-                                    type="text"
-                                    value={task.requiredDocs ?? ""}
-                                    onChange={(e) => handleDocsChange(task.id, e.target.value)}
-                                    onBlur={() => handleDocsBlur(task)}
-                                    placeholder="填寫應收文件…"
-                                    className="flex-1 text-xs bg-transparent focus:outline-none transition-colors"
-                                    style={{
-                                      color: "#1a1916",
-                                      borderBottom: "1px dashed #d8d5cc",
-                                      paddingBottom: "2px",
-                                      minWidth: 0,
-                                    }}
-                                    onFocus={(e) => (e.target.style.borderBottomColor = "#1a1916")}
-                                    onBlurCapture={(e) => (e.target.style.borderBottomColor = "#d8d5cc")}
-                                  />
+                            {/* Required docs — 3 sub-rows */}
+                            <td className="px-4 py-3 min-w-[200px]">
+                              <div className="flex flex-col gap-1.5">
+                                {/* Row 1: SOP required docs (editable) */}
+                                <input
+                                  type="text"
+                                  value={task.requiredDocs ?? ""}
+                                  onChange={(e) => handleDocsChange(task.id, e.target.value)}
+                                  onBlur={() => handleDocsBlur(task)}
+                                  placeholder="應收文件/資訊"
+                                  className="text-xs bg-transparent focus:outline-none w-full"
+                                  style={{ color: "#6b6860", borderBottom: "1px dashed #d8d5cc", paddingBottom: "1px" }}
+                                  onFocus={(e) => (e.target.style.borderBottomColor = "#1a1916")}
+                                  onBlurCapture={(e) => (e.target.style.borderBottomColor = "#d8d5cc")}
+                                />
+                                {/* Row 2: description (triggers auto-complete) */}
+                                <input
+                                  type="text"
+                                  value={task.description}
+                                  onChange={(e) => handleDescChange(task.id, e.target.value)}
+                                  onBlur={() => handleDescBlur(task)}
+                                  placeholder="新增描述…"
+                                  className="text-xs bg-transparent focus:outline-none w-full"
+                                  style={{ color: "#6b6860", borderBottom: "1px dashed #d8d5cc", paddingBottom: "1px" }}
+                                  onFocus={(e) => (e.target.style.borderBottomColor = "#1a1916")}
+                                  onBlurCapture={(e) => (e.target.style.borderBottomColor = "#d8d5cc")}
+                                />
+                                {/* Row 3: file upload */}
+                                <div className="flex flex-col gap-0.5">
                                   <button
                                     onClick={() => { setUploadingForTask(task.id); fileInputRef.current?.click(); }}
-                                    className="flex-shrink-0 p-0.5 rounded hover:bg-[#f5f4f0] transition"
+                                    className="flex items-center gap-1 text-xs w-fit hover:opacity-70 transition-opacity"
                                     style={{ color: "#a8a49a" }}
                                     title="上傳檔案"
                                   >
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
                                       <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                                     </svg>
+                                    上傳檔案
                                   </button>
+                                  {(taskFiles[task.id] ?? []).map((filename, idx) => (
+                                    <div key={idx} className="flex items-center gap-1">
+                                      <span className="text-xs font-dm-mono truncate max-w-[160px]" style={{ color: "#6b6860" }}>
+                                        📎 {filename}
+                                      </span>
+                                      <button
+                                        onClick={() => handleRemoveFile(task, idx)}
+                                        className="text-xs leading-none flex-shrink-0"
+                                        style={{ color: "#d64040" }}
+                                        title="移除檔案"
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  ))}
                                 </div>
-                                {(taskFiles[task.id] ?? []).map((filename, idx) => (
-                                  <div key={idx} className="flex items-center gap-1">
-                                    <span className="text-xs font-dm-mono truncate max-w-[150px]" style={{ color: "#6b6860" }}>
-                                      📎 {filename}
-                                    </span>
-                                    <button
-                                      onClick={() => setTaskFiles((prev) => ({
-                                        ...prev,
-                                        [task.id]: prev[task.id].filter((_, i) => i !== idx),
-                                      }))}
-                                      className="text-xs leading-none flex-shrink-0"
-                                      style={{ color: "#d64040" }}
-                                      title="移除檔案"
-                                    >
-                                      ×
-                                    </button>
-                                  </div>
-                                ))}
                               </div>
                             </td>
 
@@ -677,28 +685,6 @@ export default function ProjectDetail({ params }: Props) {
                               </span>
                             </td>
 
-                            {/* Note */}
-                            <td className="px-4 py-3.5 min-w-[180px]">
-                              <input
-                                type="text"
-                                value={task.note}
-                                onChange={(e) => handleNoteChange(task.id, e.target.value)}
-                                onBlur={() => handleNoteBlur(task)}
-                                placeholder="新增備註…"
-                                className="w-full text-sm bg-transparent focus:outline-none transition-colors"
-                                style={{
-                                  color: "#1a1916",
-                                  borderBottom: "1px dashed #d8d5cc",
-                                  paddingBottom: "2px",
-                                }}
-                                onFocus={(e) =>
-                                  (e.target.style.borderBottomColor = "#1a1916")
-                                }
-                                onBlurCapture={(e) =>
-                                  (e.target.style.borderBottomColor = "#d8d5cc")
-                                }
-                              />
-                            </td>
                           </tr>
                         );
                       })}
