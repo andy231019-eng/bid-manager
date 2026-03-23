@@ -42,6 +42,8 @@ export async function POST(req: NextRequest) {
             name: t.name,
             offset: t.offsetDays,
             due: addDays(deadlineDate, t.offsetDays),
+            ownerUnit: t.ownerUnit,
+            requiredDocs: t.requiredDocs,
           })),
         },
       },

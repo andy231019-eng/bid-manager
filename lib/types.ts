@@ -9,6 +9,8 @@ export type Task = {
   done: boolean;
   completedAt: string | null;
   note: string;
+  ownerUnit: string | null;
+  requiredDocs: string | null;
   createdAt: string;
 };
 

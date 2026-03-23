@@ -338,7 +338,7 @@ export default function ProjectDetail({ params }: Props) {
                   <table className="w-full text-sm">
                     <thead>
                       <tr style={{ borderBottom: "1px solid #f0ede8", background: "#faf9f7" }}>
-                        {["完成", "流程", "距截標日", "截止日", "完成時間", "備註"].map((h) => (
+                        {["完成", "流程", "負責人", "應收文件/資訊", "距截標日", "截止日", "完成時間", "備註"].map((h) => (
                           <th
                             key={h}
                             className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider"
@@ -378,6 +378,20 @@ export default function ProjectDetail({ params }: Props) {
                             <td className="px-4 py-3.5">
                               <span className="font-semibold" style={{ color: "#1a1916" }}>
                                 {task.name}
+                              </span>
+                            </td>
+
+                            {/* Owner unit */}
+                            <td className="px-4 py-3.5 whitespace-nowrap">
+                              <span className="text-xs" style={{ color: "#6b6860" }}>
+                                {task.ownerUnit ?? "—"}
+                              </span>
+                            </td>
+
+                            {/* Required docs */}
+                            <td className="px-4 py-3.5 min-w-[160px]">
+                              <span className="text-xs" style={{ color: "#6b6860" }}>
+                                {task.requiredDocs ?? "—"}
                               </span>
                             </td>
 
