@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import EditProjectModal from "@/components/EditProjectModal";
@@ -16,6 +16,8 @@ import {
 } from "@/lib/types";
 
 type Props = { params: { id: string } };
+
+const DEFAULT_ROLES = ["業務", "業務主管", "業務/法務", "總經/董事長", "備標小組", "備標小組/工務"];
 
 type GroupedTasks = { phase: string; phaseKey: string; tasks: Task[] };
 
@@ -52,6 +54,13 @@ export default function ProjectDetail({ params }: Props) {
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editingOffset, setEditingOffset] = useState<{ taskId: string; value: string } | null>(null);
+  const [editingOwner, setEditingOwner] = useState<string | null>(null);
+  const [addingRole, setAddingRole] = useState<{ taskId: string; value: string } | null>(null);
+  const [roles, setRoles] = useState<string[]>(DEFAULT_ROLES);
+  const [taskFiles, setTaskFiles] = useState<Record<string, string[]>>({});
+  const [uploadingForTask, setUploadingForTask] = useState<string | null>(null);
+  const [doneError, setDoneError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   async function handleDelete() {
@@ -82,8 +91,32 @@ export default function ProjectDetail({ params }: Props) {
     fetchProject();
   }, [fetchProject]);
 
+  useEffect(() => {
+    const saved = localStorage.getItem("bid-manager-roles");
+    if (saved) {
+      try {
+        const custom: string[] = JSON.parse(saved);
+        const merged = [...DEFAULT_ROLES];
+        for (const r of custom) {
+          if (!merged.includes(r)) merged.push(r);
+        }
+        setRoles(merged);
+      } catch {}
+    }
+  }, []);
+
   async function toggleDone(task: Task) {
     const newDone = !task.done;
+    if (newDone) {
+      const hasFiles = (taskFiles[task.id] ?? []).length > 0;
+      const hasDocs = !!(task.requiredDocs?.trim());
+      if (!hasFiles && !hasDocs) {
+        setDoneError(task.id);
+        setTimeout(() => setDoneError(null), 3000);
+        return;
+      }
+    }
+    setDoneError(null);
     const newCompletedAt = newDone ? nowTaiwan() : null;
 
     setProject((prev) =>
@@ -148,6 +181,62 @@ export default function ProjectDetail({ params }: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ offset: parsed }),
     });
+  }
+
+  async function handleOwnerChange(task: Task, value: string) {
+    setEditingOwner(null);
+    setProject((prev) =>
+      prev ? { ...prev, tasks: prev.tasks.map((t) => t.id === task.id ? { ...t, ownerUnit: value } : t) } : prev
+    );
+    await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ownerUnit: value }),
+    });
+  }
+
+  async function handleConfirmAddRole(task: Task) {
+    const newRole = addingRole?.value.trim();
+    setAddingRole(null);
+    setEditingOwner(null);
+    if (!newRole) return;
+    const newRoles = roles.includes(newRole) ? roles : [...roles, newRole];
+    setRoles(newRoles);
+    const custom = newRoles.filter((r) => !DEFAULT_ROLES.includes(r));
+    localStorage.setItem("bid-manager-roles", JSON.stringify(custom));
+    setProject((prev) =>
+      prev ? { ...prev, tasks: prev.tasks.map((t) => t.id === task.id ? { ...t, ownerUnit: newRole } : t) } : prev
+    );
+    await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ownerUnit: newRole }),
+    });
+  }
+
+  function handleDocsChange(taskId: string, value: string) {
+    setProject((prev) =>
+      prev ? { ...prev, tasks: prev.tasks.map((t) => t.id === taskId ? { ...t, requiredDocs: value } : t) } : prev
+    );
+  }
+
+  function handleDocsBlur(task: Task) {
+    fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requiredDocs: task.requiredDocs }),
+    });
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!uploadingForTask) return;
+    const names = Array.from(e.target.files ?? []).map((f) => f.name);
+    setTaskFiles((prev) => ({
+      ...prev,
+      [uploadingForTask]: [...(prev[uploadingForTask] ?? []), ...names],
+    }));
+    e.target.value = "";
+    setUploadingForTask(null);
   }
 
   if (loading) {
@@ -365,13 +454,23 @@ export default function ProjectDetail({ params }: Props) {
                           >
                             {/* Checkbox */}
                             <td className="px-4 py-3.5 w-10">
-                              <input
-                                type="checkbox"
-                                checked={task.done}
-                                onChange={() => toggleDone(task)}
-                                className="w-4 h-4 cursor-pointer rounded accent-black"
-                                style={{ accentColor: "#1a1916" }}
-                              />
+                              <div className="relative">
+                                <input
+                                  type="checkbox"
+                                  checked={task.done}
+                                  onChange={() => toggleDone(task)}
+                                  className="w-4 h-4 cursor-pointer rounded accent-black"
+                                  style={{ accentColor: "#1a1916" }}
+                                />
+                                {doneError === task.id && (
+                                  <div
+                                    className="absolute left-6 top-0 z-20 text-xs whitespace-nowrap px-2 py-1 rounded shadow-md"
+                                    style={{ background: "#fff", border: "1px solid #d8d5cc", color: "#d64040" }}
+                                  >
+                                    請先填寫應收文件或上傳檔案
+                                  </div>
+                                )}
+                              </div>
                             </td>
 
                             {/* 流程 name */}
@@ -383,16 +482,116 @@ export default function ProjectDetail({ params }: Props) {
 
                             {/* Owner unit */}
                             <td className="px-4 py-3.5 whitespace-nowrap">
-                              <span className="text-xs" style={{ color: "#6b6860" }}>
-                                {task.ownerUnit ?? "—"}
-                              </span>
+                              {addingRole?.taskId === task.id ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    value={addingRole.value}
+                                    onChange={(e) => setAddingRole({ taskId: task.id, value: e.target.value })}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") handleConfirmAddRole(task);
+                                      if (e.key === "Escape") { setAddingRole(null); setEditingOwner(null); }
+                                    }}
+                                    placeholder="新角色名稱"
+                                    className="w-20 text-xs bg-transparent focus:outline-none font-dm-mono"
+                                    style={{ color: "#1a1916", borderBottom: "1px dashed #1a1916", paddingBottom: "2px" }}
+                                  />
+                                  <button
+                                    onClick={() => handleConfirmAddRole(task)}
+                                    className="text-xs px-1.5 py-0.5 rounded"
+                                    style={{ color: "#2060c0", border: "1px solid #b8ccec", background: "#f0f4fc" }}
+                                  >
+                                    確認
+                                  </button>
+                                </div>
+                              ) : editingOwner === task.id ? (
+                                <select
+                                  autoFocus
+                                  defaultValue={task.ownerUnit ?? ""}
+                                  onChange={(e) => {
+                                    if (e.target.value === "__add__") {
+                                      setAddingRole({ taskId: task.id, value: "" });
+                                    } else {
+                                      handleOwnerChange(task, e.target.value);
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    if (!addingRole) setEditingOwner(null);
+                                  }}
+                                  className="text-xs focus:outline-none font-dm-mono rounded"
+                                  style={{ color: "#6b6860", border: "1px solid #d8d5cc", padding: "2px 4px", background: "#fff" }}
+                                >
+                                  {task.ownerUnit && !roles.includes(task.ownerUnit) && (
+                                    <option value={task.ownerUnit}>{task.ownerUnit}</option>
+                                  )}
+                                  {roles.map((r) => (
+                                    <option key={r} value={r}>{r}</option>
+                                  ))}
+                                  <option value="__add__">＋ 新增角色</option>
+                                </select>
+                              ) : (
+                                <button
+                                  onClick={() => setEditingOwner(task.id)}
+                                  className="text-xs text-left hover:underline font-dm-mono"
+                                  style={{ color: "#6b6860" }}
+                                  title="點擊更換負責人"
+                                >
+                                  {task.ownerUnit ?? "—"}
+                                </button>
+                              )}
                             </td>
 
                             {/* Required docs */}
-                            <td className="px-4 py-3.5 min-w-[160px]">
-                              <span className="text-xs" style={{ color: "#6b6860" }}>
-                                {task.requiredDocs ?? "—"}
-                              </span>
+                            <td className="px-4 py-3.5 min-w-[180px]">
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="text"
+                                    value={task.requiredDocs ?? ""}
+                                    onChange={(e) => handleDocsChange(task.id, e.target.value)}
+                                    onBlur={() => handleDocsBlur(task)}
+                                    placeholder="填寫應收文件…"
+                                    className="flex-1 text-xs bg-transparent focus:outline-none transition-colors"
+                                    style={{
+                                      color: "#1a1916",
+                                      borderBottom: "1px dashed #d8d5cc",
+                                      paddingBottom: "2px",
+                                      minWidth: 0,
+                                    }}
+                                    onFocus={(e) => (e.target.style.borderBottomColor = "#1a1916")}
+                                    onBlurCapture={(e) => (e.target.style.borderBottomColor = "#d8d5cc")}
+                                  />
+                                  <button
+                                    onClick={() => { setUploadingForTask(task.id); fileInputRef.current?.click(); }}
+                                    className="flex-shrink-0 p-0.5 rounded hover:bg-[#f5f4f0] transition"
+                                    style={{ color: "#a8a49a" }}
+                                    title="上傳檔案"
+                                  >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                                    </svg>
+                                  </button>
+                                </div>
+                                {(taskFiles[task.id] ?? []).map((filename, idx) => (
+                                  <div key={idx} className="flex items-center gap-1">
+                                    <span className="text-xs font-dm-mono truncate max-w-[150px]" style={{ color: "#6b6860" }}>
+                                      📎 {filename}
+                                    </span>
+                                    <button
+                                      onClick={() => setTaskFiles((prev) => ({
+                                        ...prev,
+                                        [task.id]: prev[task.id].filter((_, i) => i !== idx),
+                                      }))}
+                                      className="text-xs leading-none flex-shrink-0"
+                                      style={{ color: "#d64040" }}
+                                      title="移除檔案"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
                             </td>
 
                             {/* Offset */}
@@ -522,6 +721,15 @@ export default function ProjectDetail({ params }: Props) {
           }}
         />
       )}
+
+      {/* Hidden file input for paperclip uploads */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFileChange}
+      />
 
       {showDelete && project && (
         <div

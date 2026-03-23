@@ -11,6 +11,7 @@ export type Task = {
   note: string;
   ownerUnit: string | null;
   requiredDocs: string | null;
+  uploadedFiles?: string[];
   createdAt: string;
 };
 
