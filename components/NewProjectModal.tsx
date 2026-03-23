@@ -1,24 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Project } from "@/lib/types";
+import { Project, formatOffset } from "@/lib/types";
+import { TASK_TEMPLATES } from "@/lib/tasks-template";
 
 type Props = {
   onClose: () => void;
   onCreated: (project: Project) => void;
 };
-
-const TASK_HINTS = [
-  "T-45 確認標案資訊",
-  "T-40 JV夥伴選擇",
-  "T-30 資格審查完成",
-  "T-28 成立備標小組",
-  "T-25 備標作業",
-  "T-14 是否競標決策",
-  "T-3 JV/分包協議簽署",
-  "T+0 投標",
-  "T+7 得標結果確認",
-];
 
 export default function NewProjectModal({ onClose, onCreated }: Props) {
   const [name, setName] = useState("");
@@ -72,7 +61,7 @@ export default function NewProjectModal({ onClose, onCreated }: Props) {
               新增投標案件
             </h2>
             <p className="text-xs mt-0.5" style={{ color: "#6b6860" }}>
-              填寫基本資訊後自動產生 9 個任務時程
+              填寫基本資訊後自動產生 {TASK_TEMPLATES.length} 個 SOP 任務時程
             </p>
           </div>
           <button
@@ -166,9 +155,9 @@ export default function NewProjectModal({ onClose, onCreated }: Props) {
               將自動建立以下任務
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {TASK_HINTS.map((t) => (
+              {TASK_TEMPLATES.map((t) => (
                 <span
-                  key={t}
+                  key={t.name}
                   className="text-xs px-2 py-0.5 rounded font-dm-mono"
                   style={{
                     background: "#fff",
@@ -176,7 +165,7 @@ export default function NewProjectModal({ onClose, onCreated }: Props) {
                     color: "#6b6860",
                   }}
                 >
-                  {t}
+                  {formatOffset(t.offsetDays)} {t.name}
                 </span>
               ))}
             </div>
