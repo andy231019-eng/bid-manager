@@ -4,27 +4,26 @@ import { useState } from "react";
 import { Project } from "@/lib/types";
 
 type Props = {
+  project: Project;
   onClose: () => void;
-  onCreated: (project: Project) => void;
+  onSaved: (project: Project) => void;
 };
 
-const TASK_HINTS = [
-  "T-45 確認標案資訊",
-  "T-40 JV夥伴選擇",
-  "T-30 資格審查完成",
-  "T-28 成立備標小組",
-  "T-25 備標作業",
-  "T-14 是否競標決策",
-  "T-3 JV/分包協議簽署",
-  "T+0 投標",
-  "T+7 得標結果確認",
-];
+function toDateInputValue(dateStr: string): string {
+  const d = new Date(dateStr);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
-export default function NewProjectModal({ onClose, onCreated }: Props) {
-  const [name, setName] = useState("");
-  const [deadline, setDeadline] = useState("");
+export default function EditProjectModal({ project, onClose, onSaved }: Props) {
+  const [name, setName] = useState(project.name);
+  const [deadline, setDeadline] = useState(toDateInputValue(project.deadline));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const deadlineChanged = deadline !== toDateInputValue(project.deadline);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,16 +34,16 @@ export default function NewProjectModal({ onClose, onCreated }: Props) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/projects", {
-        method: "POST",
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim(), deadline }),
       });
       if (!res.ok) throw new Error();
-      const project = await res.json();
-      onCreated(project);
+      const updated = await res.json();
+      onSaved(updated);
     } catch {
-      setError("建立失敗，請再試一次");
+      setError("儲存失敗，請再試一次");
     } finally {
       setLoading(false);
     }
@@ -69,10 +68,10 @@ export default function NewProjectModal({ onClose, onCreated }: Props) {
               className="text-base font-bold"
               style={{ color: "#1a1916", fontFamily: "var(--font-epilogue)" }}
             >
-              新增投標案件
+              編輯案件
             </h2>
             <p className="text-xs mt-0.5" style={{ color: "#6b6860" }}>
-              填寫基本資訊後自動產生 9 個任務時程
+              {project.code}
             </p>
           </div>
           <button
@@ -104,19 +103,14 @@ export default function NewProjectModal({ onClose, onCreated }: Props) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="例：台北市政府資訊系統採購案"
               className="w-full px-3 py-2.5 rounded-lg text-sm transition focus:outline-none"
               style={{
                 border: "1px solid #d8d5cc",
                 color: "#1a1916",
                 background: "#fff",
               }}
-              onFocus={(e) =>
-                (e.target.style.borderColor = "#1a1916")
-              }
-              onBlur={(e) =>
-                (e.target.style.borderColor = "#d8d5cc")
-              }
+              onFocus={(e) => (e.target.style.borderColor = "#1a1916")}
+              onBlur={(e) => (e.target.style.borderColor = "#d8d5cc")}
             />
           </div>
 
@@ -138,14 +132,35 @@ export default function NewProjectModal({ onClose, onCreated }: Props) {
                 color: "#1a1916",
                 background: "#fff",
               }}
-              onFocus={(e) =>
-                (e.target.style.borderColor = "#1a1916")
-              }
-              onBlur={(e) =>
-                (e.target.style.borderColor = "#d8d5cc")
-              }
+              onFocus={(e) => (e.target.style.borderColor = "#1a1916")}
+              onBlur={(e) => (e.target.style.borderColor = "#d8d5cc")}
             />
           </div>
+
+          {/* Deadline change notice */}
+          {deadlineChanged && (
+            <div
+              className="rounded-lg px-3 py-2.5 flex gap-2 items-start"
+              style={{ background: "#fffbea", border: "1px solid #ddc860" }}
+            >
+              <svg
+                className="w-4 h-4 flex-shrink-0 mt-0.5"
+                fill="none"
+                viewBox="0 0 16 16"
+                style={{ color: "#a07800" }}
+              >
+                <path
+                  d="M8 2a6 6 0 100 12A6 6 0 008 2zm0 3.5v3m0 2.5h.01"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <p className="text-xs" style={{ color: "#a07800" }}>
+                截標日變更後，所有任務截止日將依原始偏移量自動重新計算。
+              </p>
+            </div>
+          )}
 
           {/* Error */}
           {error && (
@@ -156,31 +171,6 @@ export default function NewProjectModal({ onClose, onCreated }: Props) {
               {error}
             </p>
           )}
-
-          {/* Task hint */}
-          <div
-            className="rounded-lg p-3"
-            style={{ background: "#f5f4f0", border: "1px solid #d8d5cc" }}
-          >
-            <p className="text-xs font-semibold mb-2" style={{ color: "#6b6860" }}>
-              將自動建立以下任務
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {TASK_HINTS.map((t) => (
-                <span
-                  key={t}
-                  className="text-xs px-2 py-0.5 rounded font-dm-mono"
-                  style={{
-                    background: "#fff",
-                    border: "1px solid #d8d5cc",
-                    color: "#6b6860",
-                  }}
-                >
-                  {t}
-                </span>
-              ))}
-            </div>
-          </div>
         </form>
 
         {/* Footer */}
@@ -204,7 +194,7 @@ export default function NewProjectModal({ onClose, onCreated }: Props) {
             className="px-5 py-2 text-sm font-semibold rounded-lg transition hover:opacity-80 disabled:opacity-50"
             style={{ background: "#1a1916", color: "#fff" }}
           >
-            {loading ? "建立中…" : "建立案件"}
+            {loading ? "儲存中…" : "儲存變更"}
           </button>
         </div>
       </div>

@@ -50,19 +50,41 @@ export function getFirstIncompleteTask(tasks: Task[]): Task | undefined {
   return tasks.find((t) => !t.done);
 }
 
-export const PHASE_COLORS: Record<string, string> = {
-  eval: "bg-blue-100 text-blue-700 border-blue-200",
-  prep: "bg-purple-100 text-purple-700 border-purple-200",
-  bid: "bg-yellow-100 text-yellow-700 border-yellow-200",
-};
-
-export const PHASE_HEADER_COLORS: Record<string, string> = {
-  eval: "bg-blue-50 border-l-4 border-blue-400 text-blue-800",
-  prep: "bg-purple-50 border-l-4 border-purple-400 text-purple-800",
-  bid: "bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800",
-};
-
 // Get Taiwan time now as ISO string
 export function nowTaiwan(): string {
-  return new Date().toLocaleString("sv-SE", { timeZone: "Asia/Taipei" }).replace(" ", "T") + ":00";
+  return (
+    new Date().toLocaleString("sv-SE", { timeZone: "Asia/Taipei" }).replace(" ", "T") + ":00"
+  );
 }
+
+// Phase styles — all classes are static strings so Tailwind won't purge them
+export type PhaseStyle = {
+  badge: string;
+  headerBg: string;
+  dot: string;
+  label: string;
+};
+
+export const PHASE_STYLES: Record<string, PhaseStyle> = {
+  eval: {
+    badge:
+      "bg-[#f0f4fc] text-[#2060c0] border border-[#b8ccec]",
+    headerBg: "bg-[#f0f4fc] border-l-[3px] border-l-[#2060c0]",
+    dot: "bg-[#2060c0]",
+    label: "text-[#2060c0]",
+  },
+  prep: {
+    badge:
+      "bg-[#f4f0fc] text-[#7040c0] border border-[#c4b0ec]",
+    headerBg: "bg-[#f4f0fc] border-l-[3px] border-l-[#7040c0]",
+    dot: "bg-[#7040c0]",
+    label: "text-[#7040c0]",
+  },
+  bid: {
+    badge:
+      "bg-[#fffbea] text-[#a07800] border border-[#ddc860]",
+    headerBg: "bg-[#fffbea] border-l-[3px] border-l-[#a07800]",
+    dot: "bg-[#a07800]",
+    label: "text-[#a07800]",
+  },
+};
