@@ -26,9 +26,13 @@ export async function POST(req: NextRequest) {
 
     const deadlineDate = new Date(deadline);
 
-    // Generate next code
-    const count = await prisma.project.count();
-    const code = `BID-${String(count + 1).padStart(3, "0")}`;
+    // Generate next code — use max existing number to stay correct after deletions
+    const existing = await prisma.project.findMany({ select: { code: true } });
+    const maxNum = existing.reduce((max, p) => {
+      const n = parseInt(p.code.replace("BID-", ""), 10);
+      return isNaN(n) ? max : Math.max(max, n);
+    }, 0);
+    const code = `BID-${String(maxNum + 1).padStart(3, "0")}`;
 
     const project = await prisma.project.create({
       data: {
