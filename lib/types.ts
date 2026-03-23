@@ -20,22 +20,23 @@ export type Project = {
   tasks: Task[];
 };
 
+// Helper: parse a date and return its "sv-SE" string in Asia/Taipei timezone
+// "sv-SE" gives consistent "YYYY-MM-DD HH:MM:SS" format regardless of environment
+function toTaipeiString(date: string | Date): string {
+  return new Date(date).toLocaleString("sv-SE", { timeZone: "Asia/Taipei" });
+}
+
 export function formatDate(date: string | Date): string {
-  const d = new Date(date);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}/${m}/${day}`;
+  const [datePart] = toTaipeiString(date).split(" ");
+  const [y, m, d] = datePart.split("-");
+  return `${y}/${m}/${d}`;
 }
 
 export function formatDateTime(date: string | Date): string {
-  const d = new Date(date);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const h = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${y}/${m}/${day} ${h}:${min}`;
+  const [datePart, timePart] = toTaipeiString(date).split(" ");
+  const [y, m, d] = datePart.split("-");
+  const [h, min] = timePart.split(":");
+  return `${y}/${m}/${d} ${h}:${min}`;
 }
 
 export function daysUntil(date: string | Date): number {
@@ -50,11 +51,9 @@ export function getFirstIncompleteTask(tasks: Task[]): Task | undefined {
   return tasks.find((t) => !t.done);
 }
 
-// Get Taiwan time now as ISO string
+// Get current time as a UTC ISO string (valid for Prisma/DB storage)
 export function nowTaiwan(): string {
-  return (
-    new Date().toLocaleString("sv-SE", { timeZone: "Asia/Taipei" }).replace(" ", "T") + ":00"
-  );
+  return new Date().toISOString();
 }
 
 // Phase styles — all classes are static strings so Tailwind won't purge them
