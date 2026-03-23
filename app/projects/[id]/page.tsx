@@ -59,6 +59,7 @@ export default function ProjectDetail({ params }: Props) {
   const [roles, setRoles] = useState<string[]>(DEFAULT_ROLES);
   const [taskFiles, setTaskFiles] = useState<Record<string, string[]>>({});
   const [uploadingForTask, setUploadingForTask] = useState<string | null>(null);
+  const [alertModal, setAlertModal] = useState<{ message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -106,6 +107,25 @@ export default function ProjectDetail({ params }: Props) {
 
   async function toggleDone(task: Task) {
     const newDone = !task.done;
+
+    if (newDone && project) {
+      // Sequential check: all previous tasks (by due order) must be done
+      const allTasks = project.tasks;
+      const taskIdx = allTasks.findIndex((t) => t.id === task.id);
+      const firstBlocking = allTasks.slice(0, taskIdx).find((t) => !t.done);
+      if (firstBlocking) {
+        setAlertModal({ message: `請先完成「${firstBlocking.name}」` });
+        return;
+      }
+      // Document check: description or file required
+      const hasFiles = (taskFiles[task.id] ?? []).length > 0;
+      const hasDesc = task.description.trim().length > 0;
+      if (!hasFiles && !hasDesc) {
+        setAlertModal({ message: "請先填寫應收文件或上傳檔案" });
+        return;
+      }
+    }
+
     const newCompletedAt = newDone ? nowTaiwan() : null;
 
     setProject((prev) =>
@@ -453,6 +473,8 @@ export default function ProjectDetail({ params }: Props) {
                       {tasks.map((task, i) => {
                         const overdue = !task.done && daysUntil(task.due) < 0;
                         const days = daysUntil(task.due);
+                        const taskIdx = project.tasks.findIndex((t) => t.id === task.id);
+                        const isLocked = !task.done && project.tasks.slice(0, taskIdx).some((t) => !t.done);
 
                         return (
                           <tr
@@ -469,8 +491,8 @@ export default function ProjectDetail({ params }: Props) {
                                 type="checkbox"
                                 checked={task.done}
                                 onChange={() => toggleDone(task)}
-                                className="w-4 h-4 cursor-pointer rounded accent-black"
-                                style={{ accentColor: "#1a1916" }}
+                                className="w-4 h-4 cursor-pointer rounded"
+                                style={{ accentColor: isLocked ? "#d8d5cc" : "#1a1916", opacity: isLocked ? 0.4 : 1 }}
                               />
                             </td>
 
@@ -716,6 +738,47 @@ export default function ProjectDetail({ params }: Props) {
         className="hidden"
         onChange={handleFileChange}
       />
+
+      {alertModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(26,25,22,0.45)" }}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden"
+            style={{ border: "1px solid #d8d5cc" }}
+          >
+            <div className="px-6 pt-6 pb-4">
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center mb-4"
+                style={{ background: "#fffbea" }}
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <path
+                    d="M9 6v4m0 3h.01M3 9a6 6 0 1012 0A6 6 0 003 9z"
+                    stroke="#a07800"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+              <p className="text-sm" style={{ color: "#1a1916" }}>{alertModal.message}</p>
+            </div>
+            <div
+              className="px-6 py-4 flex justify-end"
+              style={{ borderTop: "1px solid #d8d5cc" }}
+            >
+              <button
+                onClick={() => setAlertModal(null)}
+                className="px-5 py-2 text-sm font-semibold rounded-lg transition hover:opacity-80"
+                style={{ background: "#1a1916", color: "#fff" }}
+              >
+                了解
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDelete && project && (
         <div
