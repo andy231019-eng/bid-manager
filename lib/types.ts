@@ -4,6 +4,7 @@ export type Task = {
   phase: string;
   phaseKey: string;
   name: string;
+  offset: number;
   due: string;
   done: boolean;
   completedAt: string | null;
@@ -49,6 +50,13 @@ export function daysUntil(date: string | Date): number {
 
 export function getFirstIncompleteTask(tasks: Task[]): Task | undefined {
   return tasks.find((t) => !t.done);
+}
+
+// Format offset as "T-45", "T", "T+7"
+export function formatOffset(offset: number): string {
+  if (offset === 0) return "T";
+  if (offset > 0) return `T+${offset}`;
+  return `T${offset}`; // offset is negative, already includes the minus sign
 }
 
 // Get current time as a UTC ISO string (valid for Prisma/DB storage)

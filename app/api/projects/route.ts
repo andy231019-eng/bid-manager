@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
             phase: t.phase,
             phaseKey: t.phaseKey,
             name: t.name,
+            offset: t.offsetDays,
             due: addDays(deadlineDate, t.offsetDays),
           })),
         },

@@ -23,6 +23,7 @@ model Task {
   phase       String
   phaseKey    String
   name        String
+  offset      Int       @default(0)
   due         DateTime
   done        Boolean   @default(false)
   completedAt DateTime?

@@ -9,6 +9,7 @@ import {
   Task,
   formatDate,
   formatDateTime,
+  formatOffset,
   daysUntil,
   PHASE_STYLES,
   nowTaiwan,
@@ -50,6 +51,7 @@ export default function ProjectDetail({ params }: Props) {
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editingOffset, setEditingOffset] = useState<{ taskId: string; value: string } | null>(null);
   const router = useRouter();
 
   async function handleDelete() {
@@ -115,6 +117,36 @@ export default function ProjectDetail({ params }: Props) {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ note: task.note }),
+    });
+  }
+
+  async function handleOffsetBlur(task: Task, raw: string) {
+    setEditingOffset(null);
+    const parsed = parseInt(raw, 10);
+    if (isNaN(parsed) || parsed === task.offset) return;
+
+    // Optimistically update offset and due in local state
+    const deadline = new Date(project!.deadline);
+    const newDue = new Date(deadline);
+    newDue.setDate(deadline.getDate() + parsed);
+
+    setProject((prev) =>
+      prev
+        ? {
+            ...prev,
+            tasks: prev.tasks.map((t) =>
+              t.id === task.id
+                ? { ...t, offset: parsed, due: newDue.toISOString() }
+                : t
+            ),
+          }
+        : prev
+    );
+
+    await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ offset: parsed }),
     });
   }
 
@@ -306,7 +338,7 @@ export default function ProjectDetail({ params }: Props) {
                   <table className="w-full text-sm">
                     <thead>
                       <tr style={{ borderBottom: "1px solid #f0ede8", background: "#faf9f7" }}>
-                        {["完成", "流程", "截止日", "完成時間", "備註"].map((h) => (
+                        {["完成", "流程", "距截標日", "截止日", "完成時間", "備註"].map((h) => (
                           <th
                             key={h}
                             className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider"
@@ -347,6 +379,48 @@ export default function ProjectDetail({ params }: Props) {
                               <span className="font-semibold" style={{ color: "#1a1916" }}>
                                 {task.name}
                               </span>
+                            </td>
+
+                            {/* Offset */}
+                            <td className="px-4 py-3.5 w-20">
+                              {editingOffset?.taskId === task.id ? (
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={editingOffset.value}
+                                  onChange={(e) => {
+                                    // Allow leading minus and digits only
+                                    if (/^-?\d*$/.test(e.target.value)) {
+                                      setEditingOffset({ taskId: task.id, value: e.target.value });
+                                    }
+                                  }}
+                                  onBlur={(e) => handleOffsetBlur(task, e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") e.currentTarget.blur();
+                                    if (e.key === "Escape") setEditingOffset(null);
+                                  }}
+                                  className="w-16 text-xs bg-transparent focus:outline-none font-dm-mono text-center"
+                                  style={{
+                                    color: "#1a1916",
+                                    borderBottom: "1px dashed #1a1916",
+                                    paddingBottom: "2px",
+                                  }}
+                                />
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    setEditingOffset({
+                                      taskId: task.id,
+                                      value: String(task.offset),
+                                    })
+                                  }
+                                  className="font-dm-mono text-xs hover:underline text-left"
+                                  style={{ color: "#a8a49a" }}
+                                  title="點擊編輯偏移天數"
+                                >
+                                  {formatOffset(task.offset)}
+                                </button>
+                              )}
                             </td>
 
                             {/* Due date */}
